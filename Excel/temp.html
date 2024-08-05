@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoomable and Resizable Canvas</title>
+    <style>
+        #zoomable-div {
+            width: 100%;
+            height: 100vh;
+            border: 1px solid #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #zoomable-div canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="zoomable-div">
+        <canvas id="zoomable-canvas"></canvas>
+    </div>
+
+    <script>
+        const zoomableDiv = document.getElementById('zoomable-div');
+        const canvas = document.getElementById('zoomable-canvas');
+        const ctx = canvas.getContext('2d');
+
+        let scale = 1;
+        const minScale = 0.5;
+        const maxScale = 3;
+
+        function resizeCanvas() {
+            const rect = zoomableDiv.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            draw();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.scale(scale, scale);
+
+            const gridSize = Math.max(20 / scale, 10);
+            const lineThickness = Math.max(1 / scale, 0.5);
+
+            const numLinesX = Math.ceil(canvas.width / gridSize);
+            const numLinesY = Math.ceil(canvas.height / gridSize);
+
+            ctx.strokeStyle = 'lightgray';
+            ctx.lineWidth = lineThickness;
+
+            for (let i = 0; i <= numLinesX; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * gridSize, 0);
+                ctx.lineTo(i * gridSize, canvas.height / scale);
+                ctx.stroke();
+            }
+
+            for (let j = 0; j <= numLinesY; j++) {
+                ctx.beginPath();
+                ctx.moveTo(0, j * gridSize);
+                ctx.lineTo(canvas.width / scale, j * gridSize);
+                ctx.stroke();
+            }
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const fontSize = Math.max(3, gridSize / 2.5);
+            ctx.font = `${fontSize}px Arial`;
+
+            for (let row = 0; row < numLinesY; row++) {
+                for (let col = 0; col < numLinesX; col++) {
+                    const x = col * gridSize + gridSize / 2;
+                    const y = row * gridSize + gridSize / 2;
+                    const randomNumber = Math.floor(Math.random() * 100);
+                    ctx.fillText(randomNumber, x, y);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        resizeCanvas();
+
+        window.addEventListener('resize', resizeCanvas);
+
+        zoomableDiv.addEventListener('wheel', (event) => {
+            event.preventDefault();
+            if (event.deltaY < 0) {
+                scale = Math.min(scale * 1.1, maxScale);
+            } else {
+                scale = Math.max(scale / 1.1, minScale);
+            }
+            draw();
+        });
+    </script>
+</body>
+</html>
