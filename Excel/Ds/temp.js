@@ -1,190 +1,207 @@
-import { HeaderCellManager } from './cellmaker.js';
+class Node{
+    constructor(sharedRow, sharedCol, value, nextRow = null, nextCol = null, prevCol = null, prevRow = null){
+        this.sharedRow = sharedRow;
+        this.sharedCol = sharedCol
+        this.value = value;
+        this.nextRow = nextRow;
+        this.nextCol = nextCol;
+        this.prevRow = prevRow;
+        this.prevCol = prevCol;
+    }
+    // Getter and setter for row and column
 
-export class SheetRenderer {
-    constructor(sheet) {
-        this.sheet = sheet;
-        this.scale = 1;
-        this.minScale = 0.5;
-        this.maxScale = 2;
-        this.baseGridSize = 20;
-        this.headerCellManager = null;
-        this.canvases = {};
-        this.contexts = {};
-        this.lastDevicePixelRatio = window.devicePixelRatio;
+    get rowValue(){
+        return this.sharedRow.value;
+    }
+    set rowValue(newValue){
+        this.sharedRow.value = newValue;
+    }
+    get colValue(){
+        return this.sharedCol.value;
+    }
+    set colValue(newValue){
+        this.sharedCol.value = newValue;
+    }
+    
+}
 
-        this.initCanvases();
-        this.setupEventListeners();
-        this.monitorDevicePixelRatio();
+class SparseMatrix {
+    constructor() {
+        this.rowHeaders = {}; // Stores the head of each row linked list
+        this.colHeaders = {}; // Stores the head of each column linked list
+        this.sharedRows = {}; // Stores shared row objects
+        this.sharedCols = {}; // Stores shared column objects
     }
 
-    initCanvases() {
-        ['spreadsheet', 'vertical', 'horizontal'].forEach(type => {
-            const canvas = document.getElementById(`${type}Canvas_${this.sheet.row}_${this.sheet.col}_${this.sheet.index}`);
-            if (!canvas) {
-                throw new Error(`Canvas not found: ${type}Canvas_${this.sheet.row}_${this.sheet.col}_${this.sheet.index}`);
-            }
-            this.canvases[type] = canvas;
-            this.contexts[type] = canvas.getContext('2d');
-        });
-
-        this.resizeCanvases();
+    // Helper function to ensure shared row and column objects exist
+    _ensureSharedRefs(row, col) {
+        if (!this.sharedRows[row]) {
+            this.sharedRows[row] = { value: null }; // Create shared row object
+            console.log(this.sharedRows)
+        }
+        if (!this.sharedCols[col]) {
+            this.sharedCols[col] = { value: null }; // Create shared column object
+            console.log(this.sharedCols)
+        }
     }
 
-    resizeCanvases() {
-        const dpr = window.devicePixelRatio;
-        Object.values(this.canvases).forEach(canvas => this.updateCanvasDimensions(canvas, dpr));
-        this.updateHeaderCells();
-        this.draw();
-    }
+    // Insert a cell with shared row and column references
+    createCell(row, col, rowValue, colValue) {
+        this._ensureSharedRefs(row, col);
+        let newNode = new Node(this.sharedRows[row], this.sharedCols[col]);
 
-    updateCanvasDimensions(canvas, dpr) {
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        const ctx = canvas.getContext('2d');
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-
-    updateHeaderCells() {
-        const visibleWidth = this.canvases.spreadsheet.clientWidth / this.scale;
-        const visibleHeight = this.canvases.spreadsheet.clientHeight / this.scale;
-
-        if (!this.headerCellManager) {
-            this.headerCellManager = new HeaderCellManager(visibleWidth, visibleHeight, this.scale);
+        // Insert into row list
+        if (!this.rowHeaders[row]) {
+            this._ensureSharedRefs(row,0)
+            let tempNode = new Node(this.sharedRows[row], {value:0})
+            this.sharedCols[0].value = colValue;
+            this.rowHeaders[row] = tempNode;
+            tempNode.nextCol = newNode;
+            newNode.prevCol = tempNode;
         } else {
-            this.headerCellManager.update(visibleWidth, visibleHeight, this.scale);
-        }
-    }
-
-    setupEventListeners() {
-        window.addEventListener('resize', this.handleResize.bind(this));
-        this.canvases.spreadsheet.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
-    }
-
-    handleResize() {
-        this.resizeCanvases();
-    }
-
-    handleWheel(event) {
-        if (event.ctrlKey || event.metaKey) {
-            event.preventDefault();
-            const delta = event.deltaY || event.detail || event.wheelDelta;
-            const zoomFactor = delta > 0 ? 0.9 : 1.1;
-
-            const rect = this.canvases.spreadsheet.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
-
-            this.zoom(zoomFactor, mouseX, mouseY);
-        }
-    }
-
-    zoom(factor, centerX, centerY) {
-        const newScale = Math.min(Math.max(this.scale * factor, this.minScale), this.maxScale);
-        if (newScale !== this.scale) {
-            this.scale = newScale;
-            this.updateHeaderCells();
-            this.draw();
-        }
-    }
-
-    monitorDevicePixelRatio() {
-        const checkDevicePixelRatio = () => {
-            const currentDevicePixelRatio = window.devicePixelRatio;
-            if (currentDevicePixelRatio !== this.lastDevicePixelRatio) {
-                this.lastDevicePixelRatio = currentDevicePixelRatio;
-                this.resizeCanvases();
+            let current = this.rowHeaders[row];
+            while (current.nextCol && current.colValue < col) {
+                current = current.nextCol;
+                if (col == 6 || col == 4){
+                    console.log(current.colValue,col-1)
+                }
             }
-            requestAnimationFrame(checkDevicePixelRatio);
-        };
-
-        requestAnimationFrame(checkDevicePixelRatio);
-    }
-
-    draw() {
-        this.clearCanvases();
-        this.drawHeaders();
-        this.drawGrid();
-    }
-
-    clearCanvases() {
-        Object.entries(this.contexts).forEach(([type, ctx]) => {
-            const canvas = this.canvases[type];
-            ctx.clearRect(0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
-        });
-    }
-
-    drawHeaders() {
-        const verticalCells = this.headerCellManager.getVerticalHeaderCells();
-        const horizontalCells = this.headerCellManager.getHorizontalHeaderCells();
-
-        this.drawHeaderCells(this.contexts.vertical, verticalCells, true);
-        this.drawHeaderCells(this.contexts.horizontal, horizontalCells, false);
-    }
-
-    drawHeaderCells(ctx, cells, isVertical) {
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 1;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        cells.forEach(cell => {
-            ctx.beginPath();
-            if (isVertical) {
-                ctx.moveTo(0, cell.y);
-                ctx.lineTo(this.canvases.vertical.width / window.devicePixelRatio, cell.y);
-                ctx.stroke();
-
-                this.drawCenteredText(ctx, cell.value.toString(), 
-                    this.canvases.vertical.width / (2 * window.devicePixelRatio), 
-                    cell.y + cell.height / 2, 
-                    this.canvases.vertical.width / window.devicePixelRatio, 
-                    cell.height);
-            } else {
-                ctx.moveTo(cell.x, 0);
-                ctx.lineTo(cell.x, this.canvases.horizontal.height / window.devicePixelRatio);
-                ctx.stroke();
-
-                this.drawCenteredText(ctx, cell.value, 
-                    cell.x + cell.width / 2, 
-                    this.canvases.horizontal.height / (2 * window.devicePixelRatio), 
-                    cell.width, 
-                    this.canvases.horizontal.height / window.devicePixelRatio);
+            let temp = current.prevcol;
+            temp.nextCol = newNode;
+            newNode.nextCol = current;
+            newNode.prevCol = temp;
+            console.log("This is from insert into row")
+            console.log(current,newNode,temp)
+            if (current){
+                current.prevCol = newNode;
             }
-        });
+            
+
+        }
+
+        // Insert into column list
+        if (!this.colHeaders[col]) {
+            this._ensureSharedRefs(0,col)
+            let tempNode = new Node({value: 0}, this.sharedCols[col])
+            this.sharedRows[0].value = rowValue
+            this.colHeaders[col] = tempNode;
+            tempNode.nextRow = newNode;
+            newNode.prevRow = tempNode;
+        } else {
+            let current = this.colHeaders[col];
+            console.log(current.rowValue,row)
+            while (current.nextRow && current.rowValue < row-1) {
+                current = current.nextRow;
+            }
+            let temp = current.nextRow
+            console.log(current.colValue,col)
+            current.nextRow = newNode;
+            newNode.nextRow = temp;
+            newNode.prevRow = current;
+            temp.prevRow = newNode;
+        }
+
+        // Set the initial values
+        this.sharedRows[row].value = rowValue;
+        this.sharedCols[col].value = colValue;
+    }
+    // Insert a cell by shifting each cell right
+    insertCellShiftRight(row,col){
+        
+    }
+    // Change the value of a specific row
+    changeRowValue(row, newValue) {
+        if (!this.sharedRows[row]) {
+            throw new Error("Row does not exist");
+        }
+        this.sharedRows[row].value = newValue;
     }
 
-    drawCenteredText(ctx, text, x, y, maxWidth, maxHeight) {
-        const fontSize = Math.min(maxWidth / (text.length * 0.7), maxHeight * 0.8, 20);
-        ctx.font = `${Math.max(8, fontSize)}px Arial`;
-        ctx.fillText(text, x, y, maxWidth);
+    // Change the value of a specific column
+    changeColValue(col, newValue) {
+        if (!this.sharedCols[col]) {
+            throw new Error("Column does not exist");
+        }
+        this.sharedCols[col].value = newValue;
     }
 
-    drawGrid() {
-        const ctx = this.contexts.spreadsheet;
-        const verticalCells = this.headerCellManager.getVerticalHeaderCells();
-        const horizontalCells = this.headerCellManager.getHorizontalHeaderCells();
-
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 1;
-
-        verticalCells.forEach(cell => {
-            ctx.beginPath();
-            ctx.moveTo(0, cell.y);
-            ctx.lineTo(this.canvases.spreadsheet.width / window.devicePixelRatio, cell.y);
-            ctx.stroke();
-        });
-
-        horizontalCells.forEach(cell => {
-            ctx.beginPath();
-            ctx.moveTo(cell.x, 0);
-            ctx.lineTo(cell.x, this.canvases.spreadsheet.height / window.devicePixelRatio);
-            ctx.stroke();
-        });
+    // Print the matrix
+    printMatrixbyrow() {
+        for (let row in this.rowHeaders) {
+            let current = this.rowHeaders[row];
+            let rowValues = [];
+            while (current) {
+                rowValues.push(`${row}(row: ${current.rowValue}, col: ${current.colValue})`);
+                current = current.nextCol;
+            }
+            console.log(rowValues.join(' -> '));
+        }
     }
 
-    destroy() {
-        window.removeEventListener('resize', this.handleResize);
-        this.canvases.spreadsheet.removeEventListener('wheel', this.handleWheel);
+    printMatrixbycol() {
+        for (let col in this.colHeaders) {
+            let current = this.colHeaders[col];
+            let rowValues = [];
+            while (current) {
+                rowValues.push(`${col}(col: ${current.colValue}, row: ${current.rowValue})`);
+                current = current.nextRow;
+            }
+            console.log(rowValues.join(' -> '));
+        }
     }
 }
+
+let matrix = new SparseMatrix();
+
+matrix.createCell(1,1,1,1)
+matrix.createCell(1,2,1,2)
+matrix.createCell(1,3,1,3)
+matrix.createCell(1,10,1,10)
+matrix.createCell(1,4,1,4)
+matrix.createCell(1,6,1,6)
+console.log("Print original matrix by row (1,1,1,1) (1,2,1,2) (1,3,1,3) ")
+matrix.printMatrixbyrow()
+
+console.log("Print original matrix by col (1,0,1,0) ")
+matrix.printMatrixbycol()
+
+// matrix.createCell(1,1,1,1)
+// console.log("Print original matrix by row (1,1,1,1) ")
+// matrix.printMatrixbyrow()
+
+// console.log("Print original matrix by col (1,1,1,1) ")
+// matrix.printMatrixbycol()
+// matrix.createCell(1,2,1,2)
+// console.log("Print original matrix by row (1,2,1,2) ")
+// matrix.printMatrixbyrow()
+
+// console.log("Print original matrix by col (1,2,1,2)")
+// matrix.printMatrixbycol()
+// matrix.createCell(1,3,1,3)
+// console.log("Print original matrix by row (1,3,1,3) ")
+// matrix.printMatrixbyrow()
+
+// console.log("Print original matrix by col(1,3,1,3) ")
+// matrix.printMatrixbycol()
+// matrix.createCell(3,3,3,3)
+// console.log("Print original matrix by row (3,3,3,3) ")
+// matrix.printMatrixbyrow()
+
+// console.log("Print original matrix by col (3,3,3,3)")
+// matrix.printMatrixbycol()
+
+// matrix.createCell(2,2,2,2)
+
+// console.log("Print original matrix by row (2,2,2,2) ")
+// matrix.printMatrixbyrow()
+
+// console.log("Print original matrix by col (2,2,2,2) ")
+// matrix.printMatrixbycol()
+
+// matrix.createCell(4,8,4,8)
+
+// console.log("Print original matrix by row (4,8,4,8) ")
+// matrix.printMatrixbyrow()
+
+// console.log("Print original matrix by col (4,8,4,8)")
+// matrix.printMatrixbycol()

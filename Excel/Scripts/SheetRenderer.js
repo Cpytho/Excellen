@@ -1,4 +1,7 @@
+// sheetrenderer.js
 import { HeaderCellManager } from './cellmaker.js';
+import { Scroll } from './scroll.js';
+import { CellFunctionality } from './cellfunctionality.js';
 
 export class SheetRenderer {
     constructor(sheet) {
@@ -11,7 +14,14 @@ export class SheetRenderer {
         this.canvases = {};
         this.contexts = {};
         this.lastDevicePixelRatio = window.devicePixelRatio;
-
+        
+        
+        // Initialize the SparseMatrix instance
+        this.sparseMatrix = this.sheet.sparsematrix;
+        this.sparseMatrix.createCell(1,1,1,1,12)
+        this.sparseMatrix.createCell(1,7,1,7,"A")
+        this.sparseMatrix.createCell(1,23,1,23,"B")
+        this.sparseMatrix.createCell(2,3,2,3,"C")
         
 
         this.initCanvases();
@@ -32,6 +42,8 @@ export class SheetRenderer {
         // Set up the ResizeObserver
         this.resizeObserver = new ResizeObserver(this.handleResize.bind(this));
         this.resizeObserver.observe(this.canvases.spreadsheet);
+        this.scrollManager = new Scroll(this);
+        this.cellFunctionality = new CellFunctionality(this);
         this.resizeCanvases();
     }
 
@@ -48,17 +60,6 @@ export class SheetRenderer {
         canvas.height = rect.height * dpr;
         const ctx = canvas.getContext('2d');
         ctx.scale(dpr, dpr);
-    }
-
-    updateHeaderCells() {
-        const visibleWidth = this.canvases.spreadsheet.clientWidth;
-        const visibleHeight = this.canvases.spreadsheet.clientHeight;
-
-        if (!this.headerCellManager) {
-            this.headerCellManager = new HeaderCellManager(visibleWidth, visibleHeight, this.scale);
-        } else {
-            this.headerCellManager.update(visibleWidth, visibleHeight, this.scale);
-        }
     }
 
     setupEventListeners() {
@@ -89,6 +90,7 @@ export class SheetRenderer {
         if (newScale !== this.scale) {
             this.scale = newScale;
             this.updateHeaderCells();
+            this.updateMaxScroll();  // Add this line
             this.draw();
         }
     }
@@ -106,10 +108,10 @@ export class SheetRenderer {
         requestAnimationFrame(checkDevicePixelRatio);
     }
 
-    draw() {
-        this.clearCanvases();
-        this.drawHeaders();
-        this.drawGrid();
+    setScroll(scrollX, scrollY) {
+        // Update the scroll position
+        // You may need to adjust this based on your grid logic
+        this.headerCellManager.setScroll(scrollX, scrollY);
     }
 
     clearCanvases() {
@@ -119,77 +121,240 @@ export class SheetRenderer {
         });
     }
 
-    drawHeaders() {
-        const verticalCells = this.headerCellManager.getVerticalHeaderCells();
-        const horizontalCells = this.headerCellManager.getHorizontalHeaderCells();
+    // ... (other methods remain the same)
 
-        this.drawHeaderCells(this.contexts.vertical, verticalCells, true);
-        this.drawHeaderCells(this.contexts.horizontal, horizontalCells, false);
+    updateHeaderCells() {
+        const visibleWidth = this.canvases.spreadsheet.clientWidth;
+        const visibleHeight = this.canvases.spreadsheet.clientHeight;
+
+        if (!this.headerCellManager) {
+            this.headerCellManager = new HeaderCellManager(visibleWidth, visibleHeight, this.scale);
+        } else {
+            this.headerCellManager.update(visibleWidth, visibleHeight, this.scale);
+        }
+
+        const totalWidth = this.headerCellManager.getTotalWidth();
+        const totalHeight = this.headerCellManager.getTotalHeight();
+        this.updateMaxScroll();
     }
 
-    drawHeaderCells(ctx, cells, isVertical) {
+    updateMaxScroll() {
+        const totalWidth = this.headerCellManager.getTotalWidth();
+        const totalHeight = this.headerCellManager.getTotalHeight();
+        const visibleWidth = this.canvases.spreadsheet.clientWidth;
+        const visibleHeight = this.canvases.spreadsheet.clientHeight;
+        this.scrollManager.updateMaxScroll(totalWidth, totalHeight, visibleWidth, visibleHeight);
+    }
+
+    updateScrollBars(scrollX, scrollY, maxScrollX, maxScrollY) {
+        this.updateVerticalScrollBar(scrollY, maxScrollY);
+        this.updateHorizontalScrollBar(scrollX, maxScrollX);
+    }
+
+    updateVerticalScrollBar(scrollY, maxScrollY) {
+        const verticalScroll = document.getElementById(`verticalScroll_${this.sheet.row}_${this.sheet.col}_${this.sheet.index}`);
+        const verticalBar = document.getElementById(`verticalBar_${this.sheet.row}_${this.sheet.col}_${this.sheet.index}`);
+        
+        const scrollHeight = verticalScroll.clientHeight;
+        const contentHeight = scrollHeight + maxScrollY;
+        const barHeight = Math.max(20, (scrollHeight / contentHeight) * scrollHeight);
+        const barTop = (scrollY / maxScrollY) * (scrollHeight - barHeight);
+
+        verticalBar.style.height = `${barHeight}px`;
+        verticalBar.style.top = `${barTop}px`;
+    }
+
+    updateHorizontalScrollBar(scrollX, maxScrollX) {
+        const horizontalScroll = document.getElementById(`horizontalScroll_${this.sheet.row}_${this.sheet.col}_${this.sheet.index}`);
+        const horizontalBar = document.getElementById(`horizontalBar_${this.sheet.row}_${this.sheet.col}_${this.sheet.index}`);
+        
+        const scrollWidth = horizontalScroll.clientWidth;
+        const contentWidth = scrollWidth + maxScrollX;
+        const barWidth = Math.max(20, (scrollWidth / contentWidth) * scrollWidth);
+        const barLeft = (scrollX / maxScrollX) * (scrollWidth - barWidth);
+
+        horizontalBar.style.width = `${barWidth}px`;
+        horizontalBar.style.left = `${barLeft}px`;
+    }
+
+    getVerticalScrollRatio() {
+        const verticalScroll = document.getElementById(`verticalScroll_${this.sheet.row}_${this.sheet.col}_${this.sheet.index}`);
+        return verticalScroll.clientHeight / (verticalScroll.clientHeight + this.scrollManager.maxScrollY);
+    }
+
+    getHorizontalScrollRatio() {
+        const horizontalScroll = document.getElementById(`horizontalScroll_${this.sheet.row}_${this.sheet.col}_${this.sheet.index}`);
+        return horizontalScroll.clientWidth / (horizontalScroll.clientWidth + this.scrollManager.maxScrollX);
+    }
+
+    draw() {
+        this.clearCanvases();
+        const { x: scrollX, y: scrollY } = this.scrollManager.getScroll();
+        
+        // Check if more content needs to be loaded
+        if (scrollX > this.headerCellManager.getTotalWidth() - this.canvases.spreadsheet.clientWidth * 1.2) {
+            this.headerCellManager.updateCells();  // Update header cells when nearing end
+        }
+        if (scrollY > this.headerCellManager.getTotalHeight() - this.canvases.spreadsheet.clientHeight * 1.2) {
+            this.headerCellManager.updateCells();  // Update header cells when nearing end
+        }
+        
+        this.drawHeaders(scrollX, scrollY);
+        this.drawGrid(scrollX, scrollY);
+        this.drawSparseMatrixValues(scrollX, scrollY); // Draw sparse matrix values
+        this.cellFunctionality.drawHighlight(); // Add this line
+    }
+
+    drawHeaders(scrollX, scrollY) {
+        const verticalCells = this.headerCellManager.getVerticalHeaderCells(scrollY);
+        const horizontalCells = this.headerCellManager.getHorizontalHeaderCells(scrollX);
+ 
+    
+        this.drawHeaderCells(this.contexts.vertical, verticalCells, true, scrollY);
+        this.drawHeaderCells(this.contexts.horizontal, horizontalCells, false, scrollX);
+    }
+    
+    drawHeaderCells(ctx, cells, isVertical, scroll) {
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 1;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-
+    
+        const canvasWidth = this.canvases[isVertical ? 'vertical' : 'horizontal'].width / window.devicePixelRatio;
+        const canvasHeight = this.canvases[isVertical ? 'vertical' : 'horizontal'].height / window.devicePixelRatio;
+    
         cells.forEach(cell => {
-            ctx.beginPath();
-            if (isVertical) {
-                ctx.moveTo(0, cell.y);
-                ctx.lineTo(this.canvases.vertical.width / window.devicePixelRatio, cell.y);
-                ctx.stroke();
-
-                this.drawCenteredText(ctx, cell.value.toString(), 
-                    this.canvases.vertical.width / (2 * window.devicePixelRatio), 
-                    cell.y + cell.height / 2, 
-                    this.canvases.vertical.width / window.devicePixelRatio, 
-                    cell.height);
-            } else {
-                ctx.moveTo(cell.x, 0);
-                ctx.lineTo(cell.x, this.canvases.horizontal.height / window.devicePixelRatio);
-                ctx.stroke();
-
-                this.drawCenteredText(ctx, cell.value, 
-                    cell.x + cell.width / 2, 
-                    this.canvases.horizontal.height / (2 * window.devicePixelRatio), 
-                    cell.width, 
-                    this.canvases.horizontal.height / window.devicePixelRatio);
+            const drawCell = (isVertical && (cell.y - scroll < canvasHeight && cell.y + cell.height - scroll > 0)) ||
+                             (!isVertical && (cell.x - scroll < canvasWidth && cell.x + cell.width - scroll > 0));
+    
+            if (drawCell) {
+                ctx.beginPath();
+                if (isVertical) {
+                    const y = cell.y - scroll;
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvasWidth, y);
+                    ctx.stroke();
+    
+                    this.drawCenteredText(
+                        ctx, 
+                        cell.value.toString(), 
+                        canvasWidth / 2, 
+                        y + cell.height / 2, 
+                        canvasWidth, 
+                        cell.height
+                    );
+                } else {
+                    const x = cell.x - scroll;
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvasHeight);
+                    ctx.stroke();
+    
+                    this.drawCenteredText(
+                        ctx, 
+                        cell.value, 
+                        x + cell.width / 2, 
+                        canvasHeight / 2, 
+                        cell.width, 
+                        canvasHeight
+                    );
+                }
             }
         });
     }
-
-    drawCenteredText(ctx, text, x, y, maxWidth, maxHeight) {
-        const fontSize = Math.min(maxWidth / (text.length * 0.7), maxHeight * 0.8, 20);
-        ctx.font = `${Math.max(8, fontSize)}px Arial`;
-        ctx.fillText(text, x, y, maxWidth);
-    }
-
-    drawGrid() {
+    
+    drawGrid(scrollX, scrollY) {
         const ctx = this.contexts.spreadsheet;
-        const verticalCells = this.headerCellManager.getVerticalHeaderCells();
-        const horizontalCells = this.headerCellManager.getHorizontalHeaderCells();
-
+        const verticalCells = this.headerCellManager.getVerticalHeaderCells(scrollY);
+        const horizontalCells = this.headerCellManager.getHorizontalHeaderCells(scrollX);
+    
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 1;
-
+    
+        const canvasWidth = this.canvases.spreadsheet.width / window.devicePixelRatio;
+        const canvasHeight = this.canvases.spreadsheet.height / window.devicePixelRatio;
+    
         verticalCells.forEach(cell => {
+            const y = cell.y - scrollY;
             ctx.beginPath();
-            ctx.moveTo(0, cell.y);
-            ctx.lineTo(this.canvases.spreadsheet.width / window.devicePixelRatio, cell.y);
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvasWidth, y);
             ctx.stroke();
         });
-
+    
         horizontalCells.forEach(cell => {
+            const x = cell.x - scrollX;
             ctx.beginPath();
-            ctx.moveTo(cell.x, 0);
-            ctx.lineTo(cell.x, this.canvases.spreadsheet.height / window.devicePixelRatio);
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvasHeight);
             ctx.stroke();
         });
+    }
+    
+
+    drawSparseMatrixValues(scrollX, scrollY) {
+        const ctx = this.contexts.spreadsheet;
+        const visibleWidth = this.canvases.spreadsheet.width / window.devicePixelRatio;
+        const visibleHeight = this.canvases.spreadsheet.height / window.devicePixelRatio;
+    
+        // Get visible header cells
+        const visibleVerticalCells = this.headerCellManager.getVerticalHeaderCells(scrollY);
+        const visibleHorizontalCells = this.headerCellManager.getHorizontalHeaderCells(scrollX);
+    
+        // Create a map for faster lookup of horizontal cells
+        const horizontalCellMap = new Map(visibleHorizontalCells.map(cell => [cell.value, cell]));
+    
+        // Iterate through the sparse matrix
+        for (let row in this.sparseMatrix.rowHeaders) {
+            let current = this.sparseMatrix.rowHeaders[row].nextCol;
+            while (current) {
+                // Find corresponding header cells
+                const vCell = visibleVerticalCells.find(cell => cell.value === current.rowValue);
+                const hCell = horizontalCellMap.get(this.headerCellManager.numberToColumnName(current.colValue));
+    
+                // If both header cells are found (i.e., the cell is visible)
+                if (vCell && hCell) {
+                    const cellX = hCell.x - scrollX;
+                    const cellY = vCell.y - scrollY;
+    
+                    // Only render cells within the visible area
+                    if (cellX >= 0 && cellX < visibleWidth && cellY >= 0 && cellY < visibleHeight) {
+                        ctx.fillStyle = '#000000';
+                        ctx.font = `${12 * this.scale}px Arial`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(current.value.toString(), cellX + hCell.width / 2, cellY + vCell.height / 2);
+                    }
+                }
+    
+                current = current.nextCol;
+            }
+        }
+    }
+    
+    
+
+    drawCenteredText(ctx, text, x, y, maxWidth, maxHeight) {
+        const baseFontSize = this.baseGridSize * this.scale;
+        let fontSize = Math.min(baseFontSize, maxHeight * 0.8);
+        
+        // Adjust font size if text is too wide
+        ctx.font = `${fontSize}px Arial`;
+        let textWidth = ctx.measureText(text).width;
+        if (textWidth > maxWidth * 0.9) {
+            fontSize *= (maxWidth * 0.9) / textWidth;
+        }
+        
+        // Ensure minimum font size
+        fontSize = 14;
+        
+        ctx.font = `${fontSize}px Arial`;
+        ctx.fillText(text, x, y, maxWidth);
     }
 
     destroy() {
         window.removeEventListener('resize', this.handleResize);
         this.canvases.spreadsheet.removeEventListener('wheel', this.handleWheel);
+        this.scrollManager.destroy(); // Clean up the Scroll manager
+        this.cellFunctionality.removeEventListeners(); // Clean up the cell functionality
     }
 }

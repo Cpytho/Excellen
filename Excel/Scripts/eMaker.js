@@ -1,14 +1,18 @@
 import {SheetRenderer} from './sheetrenderer.js' // Adjust the path if necessary
+import {SparseMatrix} from './ds.js'
 
 export class Sheet {
     constructor(name, row, col, index) {
+        
         this.name = name;  // Keeping name for potential future use
         this.row = row;
         this.col = col;
         this.index = index;
         this.elements = this.createElements();
         setTimeout(() => {
-            this.renderer = new SheetRenderer(this);     
+            this.sparsematrix = new SparseMatrix(this);   
+            this.renderer = new SheetRenderer(this); 
+            
         }, 0);
     }
 

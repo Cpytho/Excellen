@@ -1,50 +1,70 @@
-class FlexGrid {
-    constructor(container) {
-      this.container = container;
-      this.init();
+// cellmaker.js
+export class HeaderCellManager {
+    constructor(visibleWidth, visibleHeight, scale) {
+        this.visibleWidth = visibleWidth*2;
+        this.visibleHeight = visibleHeight*2;
+        this.scale = scale;
+        this.baseSize = 20;
+        this.updateCells();
     }
-  
-    init() {
-      this.container.addEventListener('mousedown', this.startResize.bind(this));
+
+    update(visibleWidth, visibleHeight, scale) {
+        this.visibleWidth += visibleWidth;
+        this.visibleHeight += visibleHeight;
+        this.scale = scale;
+        this.updateCells();
     }
-  
-    startResize(e) {
-      if (e.target.classList.contains('cell')) {
-        const cell = e.target;
-        const isHorizontal = e.offsetX > cell.offsetWidth - 10;
-        const isVertical = e.offsetY > cell.offsetHeight - 10;
-  
-        if (isHorizontal || isVertical) {
-          const initialX = e.clientX;
-          const initialY = e.clientY;
-          const initialWidth = cell.offsetWidth;
-          const initialHeight = cell.offsetHeight;
-  
-          const moveHandler = (moveEvent) => {
-            if (isHorizontal) {
-              const deltaX = moveEvent.clientX - initialX;
-              cell.style.flex = `0 0 ${initialWidth + deltaX}px`;
-            }
-            if (isVertical) {
-              const deltaY = moveEvent.clientY - initialY;
-              cell.closest('.row').style.flex = `0 0 ${initialHeight + deltaY}px`;
-            }
-          };
-  
-          const upHandler = () => {
-            document.removeEventListener('mousemove', moveHandler);
-            document.removeEventListener('mouseup', upHandler);
-          };
-  
-          document.addEventListener('mousemove', moveHandler);
-          document.addEventListener('mouseup', upHandler);
+
+    updateCells() {
+        const cellSize = this.baseSize * this.scale;
+        this.columnsCount = Math.ceil(this.visibleWidth / cellSize) + 4;
+        this.rowsCount = Math.ceil(this.visibleHeight / cellSize) + 4;
+
+        this.horizontalCells = Array.from({ length: this.columnsCount }, (_, i) => ({
+            value: this.columnIndexToLetter(i),
+            x: i * cellSize,
+            width: cellSize
+        }));
+
+        this.verticalCells = Array.from({ length: this.rowsCount }, (_, i) => ({
+            value: i + 1,
+            y: i * cellSize,
+            height: cellSize
+        }));
+    }
+
+    getHorizontalHeaderCells(scrollX) {
+        const startIndex = Math.floor(scrollX / (this.baseSize * this.scale));
+        return this.horizontalCells.map((cell, index) => ({
+            ...cell,
+            value: this.columnIndexToLetter(startIndex + index),
+            x: (startIndex + index) * (this.baseSize * this.scale)
+        }));
+    }
+
+    getVerticalHeaderCells(scrollY) {
+        const startIndex = Math.floor(scrollY / (this.baseSize * this.scale));
+        return this.verticalCells.map((cell, index) => ({
+            ...cell,
+            value: startIndex + index + 1,
+            y: (startIndex + index) * (this.baseSize * this.scale)
+        }));
+    }
+
+    columnIndexToLetter(index) {
+        let column = '';
+        while (index >= 0) {
+            column = String.fromCharCode(65 + (index % 26)) + column;
+            index = Math.floor(index / 26) - 1;
         }
-      }
+        return column;
     }
-  }
-  
-  // Initialize
-  document.addEventListener('DOMContentLoaded', () => {
-    const container = document.getElementById('mainContainer');
-    new FlexGrid(container);
-  });
+
+    getTotalWidth() {
+        return this.horizontalCells.length * this.baseSize * this.scale;
+    }
+
+    getTotalHeight() {
+        return this.verticalCells.length * this.baseSize * this.scale;
+    }
+}

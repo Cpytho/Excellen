@@ -1,119 +1,161 @@
 export class Scroll {
-    constructor(fullCanvas, horizontalBar, horizontalScroll, verticalBar, verticalScroll, sheetRenderer) {
-        this.fullCanvas = fullCanvas;
-        this.horizontalBar = horizontalBar;
-        this.horizontalScroll = horizontalScroll;
-        this.verticalBar = verticalBar;
-        this.verticalScroll = verticalScroll;
+    constructor(sheetRenderer) {
         this.sheetRenderer = sheetRenderer;
-
-        this.horizontallyScrolled = 0;
-        this.verticallyScrolled = 0;
-
-        this.totalContentWidth = fullCanvas.width;
-        this.totalContentHeight = fullCanvas.height;
-
-        this.init();
+        this.scrollX = 0;
+        this.scrollY = 0;
+        this.maxScrollX = 0;
+        this.maxScrollY = 0;
+        this.isDragging = false;
+        this.isScrollbarDragging = false;
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
+        this.setupEventListeners();
     }
 
-    init() {
-        this.updateHorizontalScrollBar();
-        this.updateVerticalScrollBar();
+    setupEventListeners() {
+        const canvas = this.sheetRenderer.canvases.spreadsheet;
+        canvas.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
+        canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
+        document.addEventListener('mousemove', this.handleMouseMove.bind(this));
+        document.addEventListener('mouseup', this.handleMouseUp.bind(this));
+
+        const verticalScrollBar = document.getElementById(`verticalBar_${this.sheetRenderer.sheet.row}_${this.sheetRenderer.sheet.col}_${this.sheetRenderer.sheet.index}`);
+        const horizontalScrollBar = document.getElementById(`horizontalBar_${this.sheetRenderer.sheet.row}_${this.sheetRenderer.sheet.col}_${this.sheetRenderer.sheet.index}`);
+
+        verticalScrollBar.addEventListener('mousedown', this.handleScrollBarMouseDown.bind(this, 'vertical'));
+        horizontalScrollBar.addEventListener('mousedown', this.handleScrollBarMouseDown.bind(this, 'horizontal'));
     }
 
-    updateGrid() {
-        this.sheetRenderer.updateContentOnScroll(this.horizontallyScrolled, this.verticallyScrolled);
+    handleScrollBarMouseDown(direction, event) {
+        event.preventDefault();
+        this.isScrollbarDragging = true;
+        this.scrollbarDirection = direction;
+        this.lastMouseX = event.clientX;
+        this.lastMouseY = event.clientY;
     }
 
-    updateHorizontalScrollBar() {
-        let isScrolling = false;
-        let startMouseX = 0;
-        let startBarLeft = this.horizontalBar.offsetLeft;
+    handleMouseMove(event) {
+        if (this.isDragging) {
+            const deltaX = this.lastMouseX - event.clientX;
+            const deltaY = this.lastMouseY - event.clientY;
+            this.scroll(deltaX, deltaY);
+            this.lastMouseX = event.clientX;
+            this.lastMouseY = event.clientY;
+        } else if (this.isScrollbarDragging) {
+            const delta = this.scrollbarDirection === 'vertical' 
+                ? event.clientY - this.lastMouseY 
+                : event.clientX - this.lastMouseX;
+            
+            const scrollRatio = this.scrollbarDirection === 'vertical'
+                ? this.sheetRenderer.getVerticalScrollRatio()
+                : this.sheetRenderer.getHorizontalScrollRatio();
 
-        const updateScroll = (diffX) => {
-            let newBarLeft = startBarLeft + diffX;
-            let maxBarLeft = this.horizontalScroll.clientWidth - this.horizontalBar.offsetWidth;
-            newBarLeft = Math.max(0, Math.min(newBarLeft, maxBarLeft));
+            const scrollDelta = delta / scrollRatio;
+            
+            if (this.scrollbarDirection === 'vertical') {
+                this.scroll(0, scrollDelta);
+            } else {
+                this.scroll(scrollDelta, 0);
+            }
 
-            this.horizontallyScrolled = newBarLeft * this.totalContentWidth / this.horizontalScroll.clientWidth;
-
-            this.horizontalBar.style.left = `${newBarLeft}px`;
-
-            this.updateGrid();
-        };
-
-        this.horizontalBar.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            isScrolling = true;
-            startMouseX = e.pageX;
-            startBarLeft = this.horizontalBar.offsetLeft;
-
-            const onMouseMove = (e) => {
-                if (!isScrolling) return;
-                e.preventDefault();
-                const diffX = e.pageX - startMouseX;
-                updateScroll(diffX);
-            };
-
-            const onMouseUp = () => {
-                isScrolling = false;
-                window.removeEventListener('pointermove', onMouseMove);
-                window.removeEventListener('pointerup', onMouseUp);
-            };
-
-            window.addEventListener('pointermove', onMouseMove);
-            window.addEventListener('pointerup', onMouseUp);
-        });
-
-        this.fullCanvas.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            updateScroll(e.deltaX);
-        });
+            this.lastMouseX = event.clientX;
+            this.lastMouseY = event.clientY;
+        }
     }
 
-    updateVerticalScrollBar() {
-        let isScrolling = false;
-        let startMouseY = 0;
-        let startBarTop = this.verticalBar.offsetTop;
+    handleMouseUp() {
+        this.isDragging = false;
+        this.isScrollbarDragging = false;
+    }
 
-        const updateScroll = (diffY) => {
-            let newBarTop = startBarTop + diffY;
-            let maxBarTop = this.verticalScroll.clientHeight - this.verticalBar.offsetHeight;
-            newBarTop = Math.max(0, Math.min(newBarTop, maxBarTop));
+    handleWheel(event) {
+        if (!event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            const deltaX = event.deltaX;
+            const deltaY = event.deltaY;
+            this.scroll(deltaX, deltaY);
+        }
+    }
 
-            this.verticallyScrolled = newBarTop * this.totalContentHeight / this.verticalScroll.clientHeight;
+    handleMouseDown(event) {
+        this.isDragging = true;
+        this.lastMouseX = event.clientX;
+        this.lastMouseY = event.clientY;
+    }
+    
+    updateMaxScroll(totalWidth, totalHeight, viewportWidth, viewportHeight) {
+        this.maxScrollX = Math.max(0, totalWidth - viewportWidth);
+        this.maxScrollY = Math.max(0, totalHeight - viewportHeight);
+        
+        // Adjust current scroll if it exceeds new maximum
+        this.scrollX = Math.min(this.scrollX, this.maxScrollX);
+        this.scrollY = Math.min(this.scrollY, this.maxScrollY);
+    }
 
-            this.verticalBar.style.top = `${newBarTop}px`;
+    updateScrollBars() {
+        this.sheetRenderer.updateScrollBars(this.scrollX, this.scrollY, this.maxScrollX, this.maxScrollY);
+    }
 
-            this.updateGrid();
-        };
+    scroll(deltaX, deltaY) {
+        this.scrollX = Math.max(0, Math.min(this.scrollX + deltaX, this.maxScrollX));
+        this.scrollY = Math.max(0, Math.min(this.scrollY + deltaY, this.maxScrollY));
+    
+        this.updateScrollBars();
+        this.checkScrollPosition();
+        this.sheetRenderer.draw();
+    }
+    
+    checkScrollPosition() {
+        // Horizontal scroll
+        const horizontalRatio = this.scrollX / this.maxScrollX;
+        if (horizontalRatio > 0.8) {
+            this.expandContent('horizontal');
+        }
+    
+        // Vertical scroll
+        const verticalRatio = this.scrollY / this.maxScrollY;
+        if (verticalRatio > 0.8) {
+            this.expandContent('vertical');
+        }
+    }
+    
+    expandContent(direction) {
+        const scrollBar = direction === 'horizontal' 
+            ? document.getElementById(`horizontalBar_${this.sheetRenderer.sheet.row}_${this.sheetRenderer.sheet.col}_${this.sheetRenderer.sheet.index}`)
+            : document.getElementById(`verticalBar_${this.sheetRenderer.sheet.row}_${this.sheetRenderer.sheet.col}_${this.sheetRenderer.sheet.index}`);
+    
+        if (scrollBar) {
+            const expandFactor = 1.2; // Factor to expand content
+            const shrinkFactor = 0.8; // Factor to shrink content
 
-        this.verticalBar.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            isScrolling = true;
-            startMouseY = e.pageY;
-            startBarTop = this.verticalBar.offsetTop;
+            if (direction === 'horizontal') {
+                if (this.scrollX >= 0.8 * (this.maxScrollX - this.sheetRenderer.canvases.spreadsheet.clientWidth)) {
+                    this.sheetRenderer.headerCellManager.updateCells();
+                    this.maxScrollX *= expandFactor;
+                    this.scrollX = Math.min(this.scrollX, this.maxScrollX);
+                }
+            } else if (direction === 'vertical') {
+                if (this.scrollY >= 0.8 * (this.maxScrollY - this.sheetRenderer.canvases.spreadsheet.clientHeight)) {
+                    this.sheetRenderer.headerCellManager.updateCells();
+                    this.maxScrollY *= expandFactor;
+                    this.scrollY = Math.min(this.scrollY, this.maxScrollY);
+                }
+            }
 
-            const onMouseMove = (e) => {
-                if (!isScrolling) return;
-                e.preventDefault();
-                const diffY = e.pageY - startMouseY;
-                updateScroll(diffY);
-            };
-
-            const onMouseUp = () => {
-                isScrolling = false;
-                window.removeEventListener('pointermove', onMouseMove);
-                window.removeEventListener('pointerup', onMouseUp);
-            };
-
-            window.addEventListener('pointermove', onMouseMove);
-            window.addEventListener('pointerup', onMouseUp);
-        });
-
-        this.fullCanvas.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            updateScroll(e.deltaY);
-        });
+            // Update scrollbar style
+            this.updateScrollBars();
+        }
+    }
+    
+    getScroll() {
+        return { x: this.scrollX, y: this.scrollY };
+    }
+    
+    destroy() {
+        const canvas = this.sheetRenderer.canvases.spreadsheet;
+        canvas.removeEventListener('wheel', this.handleWheel);
+        canvas.removeEventListener('mousedown', this.handleMouseDown);
+        document.removeEventListener('mousemove', this.handleMouseMove);
+        document.removeEventListener('mouseup', this.handleMouseUp);
     }
 }

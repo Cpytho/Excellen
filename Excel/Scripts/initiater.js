@@ -126,11 +126,10 @@ class Grid_maker {
             if (e.target.classList.contains('col-resize-handle')) {
                 currentElement = e.target.closest('.excel');
                 resizeType = 'column';
-                console.log("Starting column resize:", currentElement);
+                
             } else if (e.target.classList.contains('row-resize-handle')) {
                 currentElement = e.target.closest('.row');
                 resizeType = 'row';
-                console.log("Starting row resize:", currentElement);
             } else {
                 return;
             }
@@ -153,14 +152,12 @@ class Grid_maker {
                 const width = startWidth + (e.clientX - startX);
                 currentElement.style.width = `${width}px`;
                 currentElement.style.flex = 'none'; // Override flex settings
-                console.log(`Resizing column: New width = ${width}px`);
             } else if (resizeType === 'row') {
                 const height = startHeight + (e.clientY - startY);
                 // Ensure the height does not go below a minimum value (e.g., 50px)
                 const newHeight = Math.max(height, 50);
                 currentElement.style.height = `${newHeight}px`;
                 currentElement.style.flex = 'none'; // Override flex settings
-                console.log(`Resizing row: New height = ${newHeight}px`);
             }
 
             // Force a reflow/repaint to make sure the changes are applied
@@ -174,7 +171,6 @@ class Grid_maker {
             currentElement = null;
             document.removeEventListener('mousemove', resize);
             document.removeEventListener('mouseup', stopResize);
-            console.log("Stopped resizing");
         };
 
         this.mainContainer.addEventListener('mousedown', startResize);
