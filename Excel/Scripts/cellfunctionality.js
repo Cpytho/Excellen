@@ -60,7 +60,7 @@ export class CellFunctionality {
         const { x: scrollX, y: scrollY } = this.sheetRenderer.scrollManager.getScroll();
 
         // Highlight the cell in the main spreadsheet
-        ctx.fillStyle = 'rgba(173, 216, 230, 0.5)'; // Light blue with 50% opacity
+        ctx.fillStyle = 'rgba(173, 216, 230)'; // Light blue with 50% opacity
         ctx.fillRect(
             column.x - scrollX,
             row.y - scrollY,
@@ -69,7 +69,7 @@ export class CellFunctionality {
         );
 
         // Highlight the horizontal header
-        hCtx.fillStyle = 'rgba(173, 216, 230, 0.5)';
+        hCtx.fillStyle = 'rgba(173, 216, 230)';
         hCtx.fillRect(
             column.x - scrollX,
             0,
@@ -78,7 +78,7 @@ export class CellFunctionality {
         );
 
         // Highlight the vertical header
-        vCtx.fillStyle = 'rgba(173, 216, 230, 0.5)';
+        vCtx.fillStyle = 'rgba(173, 216, 230)';
         vCtx.fillRect(
             0,
             row.y - scrollY,

@@ -22,6 +22,7 @@ export class HeaderCellManager {
         this.visibleHeight = visibleHeight*2;
         this.horizontalHeaderCells = [];
         this.verticalHeaderCells = [];
+        this.customCellSizes = { horizontal: {}, vertical: {} };
         this.update(visibleWidth, visibleHeight, scale);
     }
 

@@ -2,6 +2,7 @@
 import { HeaderCellManager } from './cellmaker.js';
 import { Scroll } from './scroll.js';
 import { CellFunctionality } from './cellfunctionality.js';
+import { HeaderCellFunctionality } from './headercellfunctionality.js';
 
 export class SheetRenderer {
     constructor(sheet) {
@@ -44,6 +45,7 @@ export class SheetRenderer {
         this.resizeObserver.observe(this.canvases.spreadsheet);
         this.scrollManager = new Scroll(this);
         this.cellFunctionality = new CellFunctionality(this);
+        this.headerCellFunctionality = new HeaderCellFunctionality(this);
         this.resizeCanvases();
     }
 
@@ -356,5 +358,6 @@ export class SheetRenderer {
         this.canvases.spreadsheet.removeEventListener('wheel', this.handleWheel);
         this.scrollManager.destroy(); // Clean up the Scroll manager
         this.cellFunctionality.removeEventListeners(); // Clean up the cell functionality
+        this.headerCellFunctionality.removeEventListeners(); // Clean up the header functionality
     }
 }
