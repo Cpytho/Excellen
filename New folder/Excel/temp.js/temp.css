@@ -1,0 +1,26 @@
+.mainContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+.mainContainer .row {
+  display: flex;
+  flex: 1;
+}
+.mainContainer .row .cell {
+  flex: 1;
+  border: 1px solid black;
+  position: relative;
+}
+.mainContainer .row .cell::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  background: #000;
+  opacity: 0.2;
+  cursor: nwse-resize;
+}/*# sourceMappingURL=temp.css.map */
