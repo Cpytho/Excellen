@@ -129,6 +129,15 @@ body .mainContainer .row .excel.resizable .middleSection .fullCanvas {
   overflow: hidden;
   background-color: white;
 }
+body .mainContainer .row .excel.resizable .middleSection .fullCanvas .input {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  display: none;
+  position: absolute;
+  border: none;
+  outline: none;
+}
 body .mainContainer .row .excel.resizable .middleSection .fullCanvas .spreadsheetCanvas {
   width: calc(100% - 10px);
   height: calc(100% - 10px);

@@ -6,6 +6,7 @@ export class HeaderCellFunctionality {
         this.resizeStart = null;
         this.resizeType = null; // 'row' or 'column'
         this.resizeIndex = null;
+        this.currentResizePosition = null;
         this.setupEventListeners();
     }
 
@@ -32,17 +33,16 @@ export class HeaderCellFunctionality {
         const y = event.clientY - rect.top;
 
         const isHorizontal = canvas === this.sheetRenderer.canvases.horizontal;
+        const scrollOffset = isHorizontal 
+            ? this.sheetRenderer.scrollManager.getScroll().x 
+            : this.sheetRenderer.scrollManager.getScroll().y;
         const cells = isHorizontal 
-            ? this.sheetRenderer.headerCellManager.getHorizontalHeaderCells(this.sheetRenderer.scrollManager.getScroll().x)
-            : this.sheetRenderer.headerCellManager.getVerticalHeaderCells(this.sheetRenderer.scrollManager.getScroll().y);
+            ? this.sheetRenderer.headerCellManager.getHorizontalHeaderCells(scrollOffset)
+            : this.sheetRenderer.headerCellManager.getVerticalHeaderCells(scrollOffset);
 
-        const resizeEdge = this.getResizeEdge(cells, x, y, isHorizontal);
+        const resizeEdge = this.getResizeEdge(cells, x + scrollOffset, y + scrollOffset, isHorizontal);
 
-        if (resizeEdge) {
-            canvas.style.cursor = isHorizontal ? 'col-resize' : 'row-resize';
-        } else {
-            canvas.style.cursor = 'default';
-        }
+        canvas.style.cursor = resizeEdge ? (isHorizontal ? 'col-resize' : 'row-resize') : 'default';
     }
 
     getResizeEdge(cells, x, y, isHorizontal) {
@@ -56,16 +56,78 @@ export class HeaderCellFunctionality {
         return null;
     }
 
-    applyResize() {
+    handleMouseDown(event) {
+        const canvas = event.target;
+        const rect = canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        const isHorizontal = canvas === this.sheetRenderer.canvases.horizontal;
+        const scrollOffset = isHorizontal 
+            ? this.sheetRenderer.scrollManager.getScroll().x 
+            : this.sheetRenderer.scrollManager.getScroll().y;
+        const cells = isHorizontal 
+            ? this.sheetRenderer.headerCellManager.getHorizontalHeaderCells(scrollOffset)
+            : this.sheetRenderer.headerCellManager.getVerticalHeaderCells(scrollOffset);
+
+        const resizeEdge = this.getResizeEdge(cells, x + scrollOffset, y + scrollOffset, isHorizontal);
+
+        if (resizeEdge) {
+            this.isResizing = true;
+            this.resizeStart = isHorizontal ? x + scrollOffset : y + scrollOffset;
+            this.resizeType = isHorizontal ? 'column' : 'row';
+            
+            // Adjust index calculation based on resize type
+            if (this.resizeType === 'column') {
+                this.resizeIndex = cells[resizeEdge.index].col - 1; // Use column index for resizing columns
+            } else if (this.resizeType === 'row') {
+                this.resizeIndex = cells[resizeEdge.index].row - 1; // Use row index for resizing rows
+            }
+            
+            console.log(this.resizeIndex);
+            event.preventDefault();
+        }
+        
+    }
+
+    handleMouseUp(event) {
+        if (this.isResizing) {
+            this.applyResize(event);
+            this.isResizing = false;
+        }
+    }
+
+    handleDrag(event) {
         if (!this.isResizing) return;
 
         const canvas = this.resizeType === 'column' 
             ? this.sheetRenderer.canvases.horizontal 
             : this.sheetRenderer.canvases.vertical;
         const rect = canvas.getBoundingClientRect();
+        const scrollOffset = this.resizeType === 'column' 
+            ? this.sheetRenderer.scrollManager.getScroll().x 
+            : this.sheetRenderer.scrollManager.getScroll().y;
         const currentPosition = this.resizeType === 'column' 
-            ? event.clientX - rect.left 
-            : event.clientY - rect.top;
+            ? event.clientX - rect.left + scrollOffset
+            : event.clientY - rect.top + scrollOffset;
+
+        this.currentResizePosition = currentPosition;
+        this.sheetRenderer.draw(); // Redraw, potentially showing a resize line
+    }
+
+    applyResize(event) {
+        if (!this.isResizing) return;
+
+        const canvas = this.resizeType === 'column' 
+            ? this.sheetRenderer.canvases.horizontal 
+            : this.sheetRenderer.canvases.vertical;
+        const rect = canvas.getBoundingClientRect();
+        const scrollOffset = this.resizeType === 'column' 
+            ? this.sheetRenderer.scrollManager.getScroll().x 
+            : this.sheetRenderer.scrollManager.getScroll().y;
+        const currentPosition = this.resizeType === 'column' 
+            ? event.clientX - rect.left + scrollOffset
+            : event.clientY - rect.top + scrollOffset;
 
         const delta = currentPosition - this.resizeStart;
         const headerCellManager = this.sheetRenderer.headerCellManager;
@@ -82,79 +144,8 @@ export class HeaderCellFunctionality {
         );
 
         this.isResizing = false;
-        this.sheetRenderer.draw();
-    }
-
-
-    handleMouseDown(event) {
-        const canvas = event.target;
-        const rect = canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-
-        const isHorizontal = canvas === this.sheetRenderer.canvases.horizontal;
-        const cells = isHorizontal 
-            ? this.sheetRenderer.headerCellManager.getHorizontalHeaderCells(this.sheetRenderer.scrollManager.getScroll().x)
-            : this.sheetRenderer.headerCellManager.getVerticalHeaderCells(this.sheetRenderer.scrollManager.getScroll().y);
-
-        const resizeEdge = this.getResizeEdge(cells, x, y, isHorizontal);
-
-        if (resizeEdge) {
-            this.isResizing = true;
-            this.resizeStart = isHorizontal ? x : y;
-            this.resizeType = isHorizontal ? 'column' : 'row';
-            this.resizeIndex = resizeEdge.index;
-            event.preventDefault();
-        }
-    }
-
-    handleMouseUp() {
-        if (this.isResizing) {
-            this.isResizing = false;
-            this.applyResize();
-        }
-    }
-
-    handleDrag(event) {
-        if (!this.isResizing) return;
-
-        const canvas = this.resizeType === 'column' 
-            ? this.sheetRenderer.canvases.horizontal 
-            : this.sheetRenderer.canvases.vertical;
-        const rect = canvas.getBoundingClientRect();
-        const currentPosition = this.resizeType === 'column' 
-            ? event.clientX - rect.left 
-            : event.clientY - rect.top;
-
-        this.drawResizeLine(currentPosition);
-    }
-
-    drawResizeLine(position) {
-        const ctx = this.sheetRenderer.contexts.spreadsheet;
-        const { x: scrollX, y: scrollY } = this.sheetRenderer.scrollManager.getScroll();
-
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-        this.sheetRenderer.draw(); // Redraw the existing content
-
-        ctx.beginPath();
-        ctx.strokeStyle = 'rgba(0, 120, 215, 0.8)';
-        ctx.lineWidth = 2;
-
-        if (this.resizeType === 'column') {
-            ctx.moveTo(position - scrollX, 0);
-            ctx.lineTo(position - scrollX, ctx.canvas.height);
-        } else {
-            ctx.moveTo(0, position - scrollY);
-            ctx.lineTo(ctx.canvas.width, position - scrollY);
-        }
-
-        ctx.stroke();
-    }
-
-    applyResize() {
-        // Here you would update the actual cell sizes in your data model
-        // For this example, we'll just redraw without the resize line
-        this.sheetRenderer.draw();
+        this.currentResizePosition = null;
+        this.sheetRenderer.draw(); // Redraw to apply the new sizes
     }
 
     removeEventListeners() {

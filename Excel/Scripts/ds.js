@@ -32,7 +32,6 @@ export class SparseMatrix {
         this.colHeaders = {}; // Stores the head of each column linked list
         this.sharedRows = {}; // Stores shared row objects
         this.sharedCols = {}; // Stores shared column objects
-        this.data = new Map();  // Initialize data
     }
 
     // Helper function to ensure shared row and column objects exist
@@ -195,18 +194,6 @@ export class SparseMatrix {
         }
     }
 
-    set(x, y, value) {
-        this.data.set(`${x},${y}`, value);
-    }
-
-    get(x, y) {
-        console.log(x, y);
-        console.log(this.data.get(`${x},${y}`) || 1);
-        return this.data.get(`${x},${y}`) || x+y;
-        
-        
-    }
-
     insertCellShiftRight(row, col, rowValue, colValue, value) {
         this._ensureSharedRefs(row, col);
 
@@ -308,6 +295,62 @@ export class SparseMatrix {
         this.createCell(row, col, rowValue, colValue, value);
     }
 
+    // Getter function to retrieve the value at a specific row and column
+    getCell(row, col) {
+        if (!this.rowHeaders[row]) return null;
+
+        let current = this.rowHeaders[row].nextCol;
+        while (current) {
+            if (current.colValue === col) {
+                return current.value;
+            }
+            current = current.nextCol;
+        }
+        return null;
+    }
+
+    setCell(row, col, value) {
+        this._ensureSharedRefs(row, col);
+
+        if (!this.rowHeaders[row]) {
+            this.createCell(row, col, row, col, value);
+        } else {
+            let current = this.rowHeaders[row];
+            while (current) {
+                if (current.colValue === col) {
+                    current.value = value;
+                    return;
+                }
+                if (!current.nextCol || current.nextCol.colValue > col) {
+                    let newNode = new Node(this.sharedRows[row], this.sharedCols[col], value, null, current.nextCol, current);
+                    if (current.nextCol) current.nextCol.prevCol = newNode;
+                    current.nextCol = newNode;
+                    break;
+                }
+                current = current.nextCol;
+            }
+        }
+
+        if (!this.colHeaders[col]) {
+            this.createCell(row, col, row, col, value);
+        } else {
+            let current = this.colHeaders[col];
+            while (current) {
+                if (current.rowValue === row) {
+                    current.value = value;
+                    return;
+                }
+                if (!current.nextRow || current.nextRow.rowValue > row) {
+                    let newNode = new Node(this.sharedRows[row], this.sharedCols[col], value, current.nextRow, null, null, current);
+                    if (current.nextRow) current.nextRow.prevRow = newNode;
+                    current.nextRow = newNode;
+                    break;
+                }
+                current = current.nextRow;
+            }
+        }
+    }
+
     // Print the matrix
     printMatrixbyrow() {
         for (let row in this.rowHeaders) {
@@ -370,4 +413,5 @@ export class SparseMatrix {
             console.log(rowStr);
         }
     }
+
 }

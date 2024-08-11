@@ -1,4 +1,8 @@
 export class Scroll {
+    /**
+     * Creates an instance of the Scroll class.
+     * @param {SheetRenderer} sheetRenderer - The SheetRenderer instance used for rendering the spreadsheet.
+     */
     constructor(sheetRenderer) {
         this.sheetRenderer = sheetRenderer;
         this.scrollX = 0;
@@ -12,6 +16,10 @@ export class Scroll {
         this.setupEventListeners();
     }
 
+    /**
+     * Sets up event listeners for scrolling and resizing actions.
+     * @returns {void}
+     */
     setupEventListeners() {
         const canvas = this.sheetRenderer.canvases.spreadsheet;
         canvas.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
@@ -22,10 +30,20 @@ export class Scroll {
         const verticalScrollBar = document.getElementById(`verticalBar_${this.sheetRenderer.sheet.row}_${this.sheetRenderer.sheet.col}_${this.sheetRenderer.sheet.index}`);
         const horizontalScrollBar = document.getElementById(`horizontalBar_${this.sheetRenderer.sheet.row}_${this.sheetRenderer.sheet.col}_${this.sheetRenderer.sheet.index}`);
 
-        verticalScrollBar.addEventListener('mousedown', this.handleScrollBarMouseDown.bind(this, 'vertical'));
-        horizontalScrollBar.addEventListener('mousedown', this.handleScrollBarMouseDown.bind(this, 'horizontal'));
+        if (verticalScrollBar) {
+            verticalScrollBar.addEventListener('mousedown', this.handleScrollBarMouseDown.bind(this, 'vertical'));
+        }
+        if (horizontalScrollBar) {
+            horizontalScrollBar.addEventListener('mousedown', this.handleScrollBarMouseDown.bind(this, 'horizontal'));
+        }
     }
 
+    /**
+     * Handles the mousedown event on scroll bars to initiate dragging.
+     * @param {'vertical' | 'horizontal'} direction - The direction of the scroll bar being dragged.
+     * @param {MouseEvent} event - The mouse event object.
+     * @returns {void}
+     */
     handleScrollBarMouseDown(direction, event) {
         event.preventDefault();
         this.isScrollbarDragging = true;
@@ -34,18 +52,23 @@ export class Scroll {
         this.lastMouseY = event.clientY;
     }
 
+    /**
+     * Handles the mousemove event to perform scrolling or scroll bar dragging.
+     * @param {MouseEvent} event - The mouse event object.
+     * @returns {void}
+     */
     handleMouseMove(event) {
         if (this.isDragging) {
-            if(event.shiftKey) {
-            const deltaX = this.lastMouseX - event.clientX;
-            const deltaY = this.lastMouseY - event.clientY;
-            this.scroll(deltaX, deltaY);
-            this.lastMouseX = event.clientX;
-            this.lastMouseY = event.clientY;
-            } 
+            if (event.shiftKey) {
+                const deltaX = this.lastMouseX - event.clientX;
+                const deltaY = this.lastMouseY - event.clientY;
+                this.scroll(deltaX, deltaY);
+                this.lastMouseX = event.clientX;
+                this.lastMouseY = event.clientY;
+            }
         } else if (this.isScrollbarDragging) {
-            const delta = this.scrollbarDirection === 'vertical' 
-                ? event.clientY - this.lastMouseY 
+            const delta = this.scrollbarDirection === 'vertical'
+                ? event.clientY - this.lastMouseY
                 : event.clientX - this.lastMouseX;
             
             const scrollRatio = this.scrollbarDirection === 'vertical'
@@ -65,27 +88,49 @@ export class Scroll {
         }
     }
 
+    /**
+     * Handles the mouseup event to end dragging actions.
+     * @returns {void}
+     */
     handleMouseUp() {
         this.isDragging = false;
         this.isScrollbarDragging = false;
-        this.destroy()
+        this.destroy();
     }
 
+    /**
+     * Handles the wheel event for zooming or scrolling.
+     * @param {WheelEvent} event - The wheel event object.
+     * @returns {void}
+     */
     handleWheel(event) {
         if (!event.ctrlKey && !event.metaKey) {
             event.preventDefault();
-            const deltaX = event.deltaX * 0.2;
-            const deltaY = event.deltaY * 0.2;
+            const deltaX = event.deltaX;
+            const deltaY = event.deltaY;
             this.scroll(deltaX, deltaY);
         }
     }
 
+    /**
+     * Handles the mousedown event to initiate dragging.
+     * @param {MouseEvent} event - The mouse event object.
+     * @returns {void}
+     */
     handleMouseDown(event) {
         this.isDragging = true;
         this.lastMouseX = event.clientX;
         this.lastMouseY = event.clientY;
     }
     
+    /**
+     * Updates the maximum scroll values based on content and viewport dimensions.
+     * @param {number} totalWidth - The total width of the content.
+     * @param {number} totalHeight - The total height of the content.
+     * @param {number} viewportWidth - The width of the viewport.
+     * @param {number} viewportHeight - The height of the viewport.
+     * @returns {void}
+     */
     updateMaxScroll(totalWidth, totalHeight, viewportWidth, viewportHeight) {
         this.maxScrollX = Math.max(0, totalWidth - viewportWidth);
         this.maxScrollY = Math.max(0, totalHeight - viewportHeight);
@@ -95,10 +140,20 @@ export class Scroll {
         this.scrollY = Math.min(this.scrollY, this.maxScrollY);
     }
 
+    /**
+     * Updates the appearance of scroll bars based on current scroll position.
+     * @returns {void}
+     */
     updateScrollBars() {
         this.sheetRenderer.updateScrollBars(this.scrollX, this.scrollY, this.maxScrollX, this.maxScrollY);
     }
 
+    /**
+     * Scrolls the content by the given delta values.
+     * @param {number} deltaX - The horizontal scroll delta.
+     * @param {number} deltaY - The vertical scroll delta.
+     * @returns {void}
+     */
     scroll(deltaX, deltaY) {
         this.scrollX = Math.max(0, Math.min(this.scrollX + deltaX, this.maxScrollX));
         this.scrollY = Math.max(0, Math.min(this.scrollY + deltaY, this.maxScrollY));
@@ -108,6 +163,10 @@ export class Scroll {
         this.sheetRenderer.draw();
     }
     
+    /**
+     * Checks if the scroll position has reached a threshold to expand content.
+     * @returns {void}
+     */
     checkScrollPosition() {
         // Horizontal scroll
         const horizontalRatio = this.scrollX / this.maxScrollX;
@@ -122,6 +181,11 @@ export class Scroll {
         }
     }
     
+    /**
+     * Expands content based on the scroll direction and updates scroll bars.
+     * @param {'horizontal' | 'vertical'} direction - The direction of the content expansion.
+     * @returns {void}
+     */
     expandContent(direction) {
         const scrollBar = direction === 'horizontal' 
             ? document.getElementById(`horizontalBar_${this.sheetRenderer.sheet.row}_${this.sheetRenderer.sheet.col}_${this.sheetRenderer.sheet.index}`)
@@ -150,10 +214,18 @@ export class Scroll {
         }
     }
     
+    /**
+     * Gets the current scroll position.
+     * @returns {{ x: number, y: number }} The current scroll position.
+     */
     getScroll() {
         return { x: this.scrollX, y: this.scrollY };
     }
     
+    /**
+     * Cleans up resources and removes event listeners.
+     * @returns {void}
+     */
     destroy() {
         const canvas = this.sheetRenderer.canvases.spreadsheet;
         canvas.removeEventListener('wheel', this.handleWheel);
@@ -161,5 +233,4 @@ export class Scroll {
         document.removeEventListener('mousemove', this.handleMouseMove);
         document.removeEventListener('mouseup', this.handleMouseUp);
     }
-    
 }

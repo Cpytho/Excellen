@@ -15,6 +15,7 @@ html {
     @include resetCss();
     height: 100vh;
     width: 100vw;
+    
 }
 
 body {
@@ -144,6 +145,14 @@ body {
                         position: relative;
                         overflow: hidden;
                         background-color: white;
+
+                        .input {
+                            @include resetCss();
+                            display: none;
+                            position: absolute;
+                            border: none;
+                            outline: none;
+                        }
 
                         .spreadsheetCanvas {
                             width: calc(100% - 10px); // Leave space for vertical scrollbar

@@ -4,6 +4,7 @@ import { Scroll } from './scroll.js';
 import { CellFunctionality } from './cellfunctionality.js';
 import { HeaderCellFunctionality } from './headercellfunctionality.js';
 
+
 export class SheetRenderer {
     constructor(sheet) {
         this.sheet = sheet;
@@ -20,10 +21,7 @@ export class SheetRenderer {
         // Initialize the SparseMatrix instance
         this.sparseMatrix = this.sheet.sparsematrix;
         this.sparseMatrix.createCell(1,1,1,1,12)
-        this.sparseMatrix.createCell(1,7,1,7,"A")
-        this.sparseMatrix.createCell(1,23,1,23,"B")
-        this.sparseMatrix.createCell(2,3,2,3,"C")
-        
+
 
         this.initCanvases();
         this.setupEventListeners();
@@ -71,6 +69,7 @@ export class SheetRenderer {
 
     handleResize() {
         this.resizeCanvases();
+         
     }
 
     handleWheel(event) {
@@ -135,8 +134,6 @@ export class SheetRenderer {
             this.headerCellManager.update(visibleWidth, visibleHeight, this.scale);
         }
 
-        const totalWidth = this.headerCellManager.getTotalWidth();
-        const totalHeight = this.headerCellManager.getTotalHeight();
         this.updateMaxScroll();
     }
 
@@ -203,25 +200,61 @@ export class SheetRenderer {
         
         this.drawHeaders(scrollX, scrollY);
         this.drawGrid(scrollX, scrollY);
-        this.drawSparseMatrixValues(scrollX, scrollY); // Draw sparse matrix values
-        this.cellFunctionality.drawHighlight(); // Add this line
+        this.drawSparseMatrixValues(scrollX, scrollY);
+        this.cellFunctionality.drawHighlight();
+
+        // Update input box position
+        if (this.cellFunctionality.selectedCell) {
+            this.cellFunctionality.updateInputElement(this.cellFunctionality.selectedCell);
+        }
+
+        // Draw resize line if resizing
+        if (this.headerCellFunctionality.isResizing) {
+            this.drawResizeLine();
+        }
+    }
+
+    drawResizeLine() {
+        const { isResizing, resizeType, currentResizePosition } = this.headerCellFunctionality;
+        if (!isResizing || currentResizePosition === null) return;
+
+        const ctx = this.contexts.spreadsheet;
+        const { x: scrollX, y: scrollY } = this.scrollManager.getScroll();
+
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(0, 120, 215, 0.8)';
+        ctx.lineWidth = 2;
+
+        if (resizeType === 'column') {
+            const x = currentResizePosition - scrollX;
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, ctx.canvas.clientHeight);
+        } else {
+            const y = currentResizePosition - scrollY;
+            ctx.moveTo(0, y);
+            ctx.lineTo(ctx.canvas.clientWidth, y);
+        }
+
+        ctx.stroke();
     }
 
     drawHeaders(scrollX, scrollY) {
-        const verticalCells = this.headerCellManager.getVerticalHeaderCells(scrollY);
-        const horizontalCells = this.headerCellManager.getHorizontalHeaderCells(scrollX);
- 
+        this.verticalCells = this.headerCellManager.getVerticalHeaderCells(scrollY);
+        this.horizontalCells = this.headerCellManager.getHorizontalHeaderCells(scrollX);
     
-        this.drawHeaderCells(this.contexts.vertical, verticalCells, true, scrollY);
-        this.drawHeaderCells(this.contexts.horizontal, horizontalCells, false, scrollX);
+    
+        this.drawHeaderCells(this.contexts.vertical, this.verticalCells, true, scrollY);
+        this.drawHeaderCells(this.contexts.horizontal, this.horizontalCells, false, scrollX);
     }
     
     drawHeaderCells(ctx, cells, isVertical, scroll) {
-        ctx.strokeStyle = '#000000';
+        
         ctx.lineWidth = 1;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-    
+        ctx.strokeStyle = '#000000';
+        ctx.fillStyle = 'black';
+        
         const canvasWidth = this.canvases[isVertical ? 'vertical' : 'horizontal'].width / window.devicePixelRatio;
         const canvasHeight = this.canvases[isVertical ? 'vertical' : 'horizontal'].height / window.devicePixelRatio;
     
@@ -232,6 +265,7 @@ export class SheetRenderer {
             if (drawCell) {
                 ctx.beginPath();
                 if (isVertical) {
+                    
                     const y = cell.y - scroll;
                     ctx.moveTo(0, y);
                     ctx.lineTo(canvasWidth, y);
@@ -265,12 +299,14 @@ export class SheetRenderer {
     }
     
     drawGrid(scrollX, scrollY) {
+        
         const ctx = this.contexts.spreadsheet;
         const verticalCells = this.headerCellManager.getVerticalHeaderCells(scrollY);
         const horizontalCells = this.headerCellManager.getHorizontalHeaderCells(scrollX);
-    
+
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 1;
+        
     
         const canvasWidth = this.canvases.spreadsheet.width / window.devicePixelRatio;
         const canvasHeight = this.canvases.spreadsheet.height / window.devicePixelRatio;
@@ -292,8 +328,9 @@ export class SheetRenderer {
         });
     }
     
-
     drawSparseMatrixValues(scrollX, scrollY) {
+        
+
         const ctx = this.contexts.spreadsheet;
         const visibleWidth = this.canvases.spreadsheet.width / window.devicePixelRatio;
         const visibleHeight = this.canvases.spreadsheet.height / window.devicePixelRatio;
@@ -319,12 +356,32 @@ export class SheetRenderer {
                     const cellY = vCell.y - scrollY;
     
                     // Only render cells within the visible area
-                    if (cellX >= 0 && cellX < visibleWidth && cellY >= 0 && cellY < visibleHeight) {
+                    if (cellX < visibleWidth && cellY < visibleHeight) {
+                        // Save the context state
+                        ctx.save();
+    
+                        // clipping area for the cell
+                        ctx.beginPath();
+                        ctx.rect(cellX, cellY, hCell.width, vCell.height);
+                        ctx.clip();
+    
+                        // Set text styles
                         ctx.fillStyle = '#000000';
-                        ctx.font = `${12 * this.scale}px Arial`;
+                        ctx.font = `${12}px Arial`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText(current.value.toString(), cellX + hCell.width / 2, cellY + vCell.height / 2);
+                        
+    
+                        // Draw the text within the clipped region
+                        if (current.value !== undefined && current.value !== null) {
+                            ctx.fillText(current.value.toString(), cellX + hCell.width / 2, cellY + vCell.height / 2);
+                        }
+                        else{
+                            ctx.fillText('!!!!! ',  cellX + hCell.width / 2, cellY + vCell.height / 2)
+                        }
+    
+                        // Restore the context state
+                        ctx.restore();
                     }
                 }
     
@@ -334,13 +391,13 @@ export class SheetRenderer {
     }
     
     
-
     drawCenteredText(ctx, text, x, y, maxWidth, maxHeight) {
         const baseFontSize = this.baseGridSize * this.scale;
         let fontSize = Math.min(baseFontSize, maxHeight * 0.8);
         
         // Adjust font size if text is too wide
         ctx.font = `${fontSize}px Arial`;
+       
         let textWidth = ctx.measureText(text).width;
         if (textWidth > maxWidth * 0.9) {
             fontSize *= (maxWidth * 0.9) / textWidth;
@@ -350,7 +407,10 @@ export class SheetRenderer {
         fontSize = 14;
         
         ctx.font = `${fontSize}px Arial`;
+        ctx.strokeStyle = "black"
         ctx.fillText(text, x, y, maxWidth);
+        
+
     }
 
     destroy() {
